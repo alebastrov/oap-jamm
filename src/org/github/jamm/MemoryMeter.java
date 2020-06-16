@@ -5,45 +5,27 @@ import java.lang.ref.Reference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.IdentityHashMap;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.Callable;
 
 public class MemoryMeter {
-	
-	private static final String outerClassReference = "this\\$[0-9]+";
-	
+
+    private static final String outerClassReference = "this\\$[0-9]+";
+    private static final Class clsJLRModule;
+    private static final Class clsJLRAccessibleObject;
+    private static final Class clsSRAAnnotationInvocationHandler;
+    private static final Class clsSRAAnnotationType;
+    private static final Class clsJIRUnsafeFieldAccessorImpl;
+    private static final Class clsJIRDelegatingMethodAccessorImpl;
     private static Instrumentation instrumentation;
 
-    public static void premain(String options, Instrumentation inst) {
-        MemoryMeter.instrumentation = inst;
-    }
-    
-    public static void agentmain(String options, Instrumentation inst) {
-    	MemoryMeter.instrumentation = inst;
-    }
-
-    public static boolean hasInstrumentation() {
-        return instrumentation != null;
-    }
-
-    public static enum Guess {
-        /* If instrumentation is not available, error when measuring */
-        NEVER,
-        /* If instrumentation is available, use it, otherwise guess the size using predefined specifications */
-        FALLBACK_SPEC,
-        /* If instrumentation is available, use it, otherwise guess the size using sun.misc.Unsafe */
-        FALLBACK_UNSAFE,
-        /* If instrumentation is available, use it, otherwise guess the size using sun.misc.Unsafe; if that is unavailable,
-         * guess using predefined specifications.*/
-        FALLBACK_BEST,
-        /* Always guess the size of measured objects using predefined specifications*/
-        ALWAYS_SPEC,
-        /* Always guess the size of measured objects using sun.misc.Unsafe */
-        ALWAYS_UNSAFE
+    static {
+        clsJLRModule = maybeGetClass("java.lang.reflect.Module");
+        clsJLRAccessibleObject = maybeGetClass("java.lang.reflect.AccessibleObject");
+        clsSRAAnnotationInvocationHandler = maybeGetClass("sun.reflect.annotation.AnnotationInvocationHandler");
+        clsSRAAnnotationType = maybeGetClass("sun.reflect.annotation.AnnotationType");
+        clsJIRUnsafeFieldAccessorImpl = maybeGetClass("jdk.internal.reflect.UnsafeFieldAccessorImpl");
+        clsJIRDelegatingMethodAccessorImpl = maybeGetClass("jdk.internal.reflect.DelegatingMethodAccessorImpl");
     }
 
     private final Callable<Set<Object>> trackerProvider;
@@ -66,10 +48,10 @@ public class MemoryMeter {
     }
 
     /**
-     * @param trackerProvider returns a Set with which to track seen objects and avoid cycles
+     * @param trackerProvider       returns a Set with which to track seen objects and avoid cycles
      * @param includeFullBufferSize
      * @param guess
-     * @param listenerFactory the <code>MemoryMeterListener.Factory</code>
+     * @param listenerFactory       the <code>MemoryMeterListener.Factory</code>
      */
     private MemoryMeter(Callable<Set<Object>> trackerProvider,
                         boolean includeFullBufferSize,
@@ -88,18 +70,38 @@ public class MemoryMeter {
         this.listenerFactory = listenerFactory;
     }
 
+    public static void premain(String options, Instrumentation inst) {
+        MemoryMeter.instrumentation = inst;
+    }
+
+    public static void agentmain(String options, Instrumentation inst) {
+        MemoryMeter.instrumentation = inst;
+    }
+
+    public static boolean hasInstrumentation() {
+        return instrumentation != null;
+    }
+
+    private static Class<?> maybeGetClass(String name) {
+        try {
+            return Class.forName(name);
+        } catch (ClassNotFoundException e) {
+            return null;
+        }
+    }
+
     /**
      * @param trackerProvider
      * @return a MemoryMeter with the given provider
      */
     public MemoryMeter withTrackerProvider(Callable<Set<Object>> trackerProvider) {
         return new MemoryMeter(trackerProvider,
-                               includeFullBufferSize,
-                               guess,
-                               ignoreOuterClassReference,
-                               ignoreKnownSingletons,
-                               ignoreNonStrongReferences,
-                               listenerFactory);
+                includeFullBufferSize,
+                guess,
+                ignoreOuterClassReference,
+                ignoreKnownSingletons,
+                ignoreNonStrongReferences,
+                listenerFactory);
     }
 
     /**
@@ -109,12 +111,12 @@ public class MemoryMeter {
      */
     public MemoryMeter omitSharedBufferOverhead() {
         return new MemoryMeter(trackerProvider,
-                               false,
-                               guess,
-                               ignoreOuterClassReference,
-                               ignoreKnownSingletons,
-                               ignoreNonStrongReferences,
-                               listenerFactory);
+                false,
+                guess,
+                ignoreOuterClassReference,
+                ignoreKnownSingletons,
+                ignoreNonStrongReferences,
+                listenerFactory);
     }
 
     /**
@@ -122,51 +124,51 @@ public class MemoryMeter {
      */
     public MemoryMeter withGuessing(Guess guess) {
         return new MemoryMeter(trackerProvider,
-                               includeFullBufferSize,
-                               guess,
-                               ignoreOuterClassReference,
-                               ignoreKnownSingletons,
-                               ignoreNonStrongReferences,
-                               listenerFactory);
+                includeFullBufferSize,
+                guess,
+                ignoreOuterClassReference,
+                ignoreKnownSingletons,
+                ignoreNonStrongReferences,
+                listenerFactory);
     }
-    
+
     /**
      * @return a MemoryMeter that ignores the size of an outer class reference
      */
     public MemoryMeter ignoreOuterClassReference() {
         return new MemoryMeter(trackerProvider,
-                               includeFullBufferSize,
-                               guess,
-                               true,
-                               ignoreKnownSingletons,
-                               ignoreNonStrongReferences,
-                               listenerFactory);
+                includeFullBufferSize,
+                guess,
+                true,
+                ignoreKnownSingletons,
+                ignoreNonStrongReferences,
+                listenerFactory);
     }
-    
+
     /**
      * return a MemoryMeter that ignores space occupied by known singletons such as Class objects and Enums
      */
     public MemoryMeter ignoreKnownSingletons() {
         return new MemoryMeter(trackerProvider,
-                               includeFullBufferSize,
-                               guess,
-                               ignoreOuterClassReference,
-                               true,
-                               ignoreNonStrongReferences,
-                               listenerFactory);
+                includeFullBufferSize,
+                guess,
+                ignoreOuterClassReference,
+                true,
+                ignoreNonStrongReferences,
+                listenerFactory);
     }
-    
+
     /**
      * return a MemoryMeter that ignores space occupied by known singletons such as Class objects and Enums
      */
     public MemoryMeter ignoreNonStrongReferences() {
         return new MemoryMeter(trackerProvider,
-                               includeFullBufferSize,
-                               guess,
-                               ignoreOuterClassReference,
-                               ignoreKnownSingletons,
-                               true,
-                               listenerFactory);
+                includeFullBufferSize,
+                guess,
+                ignoreOuterClassReference,
+                ignoreKnownSingletons,
+                true,
+                listenerFactory);
     }
 
     /**
@@ -179,18 +181,19 @@ public class MemoryMeter {
     /**
      * Makes this <code>MemoryMeter</code> prints the classes tree to <code>System.out</code> up to the specified depth
      * when measuring
+     *
      * @param depth the maximum depth for which the class tree must be printed
      */
     public MemoryMeter enableDebug(int depth) {
         if (depth <= 0)
             throw new IllegalArgumentException(String.format("the depth must be greater than zero (was %s).", depth));
         return new MemoryMeter(trackerProvider,
-                               includeFullBufferSize,
-                               guess,
-                               ignoreOuterClassReference,
-                               ignoreKnownSingletons,
-                               ignoreNonStrongReferences,
-                               new TreePrinter.Factory(depth));
+                includeFullBufferSize,
+                guess,
+                ignoreOuterClassReference,
+                ignoreKnownSingletons,
+                ignoreNonStrongReferences,
+                new TreePrinter.Factory(depth));
     }
 
     /**
@@ -239,8 +242,7 @@ public class MemoryMeter {
         Set<Object> tracker;
         try {
             tracker = trackerProvider.call();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
         MemoryMeterListener listener = listenerFactory.newInstance();
@@ -251,6 +253,8 @@ public class MemoryMeter {
         // track stack manually so we can handle deeper hierarchies than recursion
         Deque<Object> stack = new ArrayDeque<Object>();
         stack.push(object);
+
+        var cFields = new HashMap<Class<?>, List<Field>>();
 
         long total = 0;
         while (!stack.isEmpty()) {
@@ -265,8 +269,8 @@ public class MemoryMeter {
             } else if (current instanceof ByteBuffer && !includeFullBufferSize) {
                 total += ((ByteBuffer) current).remaining();
             } else {
-            	Object referent = (ignoreNonStrongReferences && (current instanceof Reference)) ? ((Reference<?>)current).get() : null;
-                addFieldChildren(current, stack, tracker, referent, listener);
+                Object referent = (ignoreNonStrongReferences && (current instanceof Reference)) ? ((Reference<?>) current).get() : null;
+                addFieldChildren(current, cFields, stack, tracker, referent, listener);
             }
         }
 
@@ -290,6 +294,7 @@ public class MemoryMeter {
         Deque<Object> stack = new ArrayDeque<Object>();
         stack.push(object);
 
+        var cFields = new HashMap<Class<?>, List<Field>>();
         long total = 0;
         while (!stack.isEmpty()) {
             Object current = stack.pop();
@@ -300,8 +305,8 @@ public class MemoryMeter {
             if (current instanceof Object[]) {
                 addArrayChildren((Object[]) current, stack, tracker, listener);
             } else {
-            	Object referent = (ignoreNonStrongReferences && (current instanceof Reference)) ? ((Reference<?>)current).get() : null;
-                addFieldChildren(current, stack, tracker, referent, listener);
+                Object referent = (ignoreNonStrongReferences && (current instanceof Reference)) ? ((Reference<?>) current).get() : null;
+                addFieldChildren(current, cFields, stack, tracker, referent, listener);
             }
         }
 
@@ -309,75 +314,65 @@ public class MemoryMeter {
         return total;
     }
 
-    private void addFieldChildren(Object current, Deque<Object> stack, Set<Object> tracker, Object ignorableChild, MemoryMeterListener listener) {
-        Class<?> cls = current.getClass();
-        while (!skipClass(cls)) {
-            for (Field field : cls.getDeclaredFields()) {
+    public void getFields(Class<?> clazz, List<Field> fields) {
+        while (!skipClass(clazz)) {
+            for (Field field : clazz.getDeclaredFields()) {
                 if (field.getType().isPrimitive()
                         || Modifier.isStatic(field.getModifiers())
                         || field.isAnnotationPresent(Unmetered.class)) {
                     continue;
                 }
-                
+
                 if (ignoreOuterClassReference && field.getName().matches(outerClassReference)) {
-                	continue;
+                    continue;
                 }
 
                 if (ignoreClass(field.getType())) {
-                	continue;
+                    continue;
                 }
 
                 field.setAccessible(true);
-                Object child;
-                try {
-                    child = field.get(current);
-                } catch (IllegalAccessException e) {
-                    throw new RuntimeException(e);
-                }
-                
-                if (child != ignorableChild) {
-	                if (child != null && !tracker.contains(child)) {
-	                    stack.push(child);
-	                    tracker.add(child);
-	                    listener.fieldAdded(current, field.getName(), child);
-	                }
-                }
+
+                fields.add(field);
             }
 
-            cls = cls.getSuperclass();
+            clazz = clazz.getSuperclass();
         }
     }
 
-    private static final Class clsJLRModule;
-    private static final Class clsJLRAccessibleObject;
-    private static final Class clsSRAAnnotationInvocationHandler;
-    private static final Class clsSRAAnnotationType;
-    private static final Class clsJIRUnsafeFieldAccessorImpl;
-    private static final Class clsJIRDelegatingMethodAccessorImpl;
-    static
-    {
-        clsJLRModule = maybeGetClass("java.lang.reflect.Module");
-        clsJLRAccessibleObject = maybeGetClass("java.lang.reflect.AccessibleObject");
-        clsSRAAnnotationInvocationHandler = maybeGetClass("sun.reflect.annotation.AnnotationInvocationHandler");
-        clsSRAAnnotationType = maybeGetClass("sun.reflect.annotation.AnnotationType");
-        clsJIRUnsafeFieldAccessorImpl = maybeGetClass("jdk.internal.reflect.UnsafeFieldAccessorImpl");
-        clsJIRDelegatingMethodAccessorImpl = maybeGetClass("jdk.internal.reflect.DelegatingMethodAccessorImpl");
-    }
+    private void addFieldChildren(Object current, HashMap<Class<?>, List<Field>> fields,
+                                  Deque<Object> stack, Set<Object> tracker, Object ignorableChild, MemoryMeterListener listener) {
 
-    private static Class<?> maybeGetClass(String name)
-    {
-        try {
-            return Class.forName(name);
-        } catch (ClassNotFoundException e) {
-            return null;
+        var cFields = fields.computeIfAbsent(current.getClass(), (c) -> {
+            var ret = new ArrayList<Field>();
+            getFields(c, ret);
+
+            return ret;
+        });
+
+        for (var field : cFields) {
+            Object child;
+            try {
+                child = field.get(current);
+            } catch (IllegalAccessException e) {
+                throw new RuntimeException(e);
+            }
+
+            if (child != ignorableChild) {
+                if (child != null && !tracker.contains(child)) {
+                    stack.push(child);
+                    tracker.add(child);
+                    listener.fieldAdded(current, field.getName(), child);
+                }
+            }
         }
     }
 
     private boolean skipClass(Class<?> cls) {
         return cls == null
-               || cls == clsJLRModule || cls == clsJLRAccessibleObject
-               || cls == clsSRAAnnotationInvocationHandler || cls == clsSRAAnnotationType
-               || cls == clsJIRUnsafeFieldAccessorImpl || cls == clsJIRDelegatingMethodAccessorImpl;
+                || cls == clsJLRModule || cls == clsJLRAccessibleObject
+                || cls == clsSRAAnnotationInvocationHandler || cls == clsSRAAnnotationType
+                || cls == clsJIRUnsafeFieldAccessorImpl || cls == clsJIRDelegatingMethodAccessorImpl;
     }
 
     private boolean ignoreClass(Class<?> cls) {
@@ -406,16 +401,32 @@ public class MemoryMeter {
         for (int i = 0; i < current.length; i++) {
             Object child = current[i];
             if (child != null && !tracker.contains(child)) {
-            	
+
                 Class<?> childCls = child.getClass();
                 if (ignoreClass(childCls)) {
-                	continue;
+                    continue;
                 }
-                
+
                 stack.push(child);
                 tracker.add(child);
-                listener.fieldAdded(current, Integer.toString(i) , child);
+                listener.fieldAdded(current, Integer.toString(i), child);
             }
         }
+    }
+
+    public static enum Guess {
+        /* If instrumentation is not available, error when measuring */
+        NEVER,
+        /* If instrumentation is available, use it, otherwise guess the size using predefined specifications */
+        FALLBACK_SPEC,
+        /* If instrumentation is available, use it, otherwise guess the size using sun.misc.Unsafe */
+        FALLBACK_UNSAFE,
+        /* If instrumentation is available, use it, otherwise guess the size using sun.misc.Unsafe; if that is unavailable,
+         * guess using predefined specifications.*/
+        FALLBACK_BEST,
+        /* Always guess the size of measured objects using predefined specifications*/
+        ALWAYS_SPEC,
+        /* Always guess the size of measured objects using sun.misc.Unsafe */
+        ALWAYS_UNSAFE
     }
 }

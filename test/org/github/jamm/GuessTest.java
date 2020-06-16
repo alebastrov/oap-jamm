@@ -60,7 +60,7 @@ public class GuessTest {
     }
 
     @Test
-    public void testProblemClasses() throws InterruptedException, ExecutionException, IOException, IllegalAccessException, InstantiationException {
+    public void testProblemClasses() throws Exception {
         final MemoryMeter instrument = new MemoryMeter();
         final MemoryMeter guess = new MemoryMeter().withGuessing(MemoryMeter.Guess.ALWAYS_UNSAFE);
         Assert.assertTrue("MemoryMeter not initialised", MemoryMeter.hasInstrumentation());
@@ -73,7 +73,7 @@ public class GuessTest {
         final List<GeneratedClass> classes = compile(defs);
         int failures = 0;
         for (final GeneratedClass clazz : classes) {
-            Object obj = clazz.clazz.newInstance();
+            Object obj = clazz.clazz.getConstructor().newInstance();
             long instrumented = instrument.measure(obj);
             long guessed = guess.measure(obj);
             if (instrumented != guessed) {
@@ -92,22 +92,19 @@ public class GuessTest {
         Assert.assertTrue("MemoryMeter not initialised", MemoryMeter.hasInstrumentation());
         final List<Future<Integer>> results = new ArrayList<Future<Integer>>();
         for (int i = 0 ; i < Runtime.getRuntime().availableProcessors() ; i++) {
-            results.add(EXEC.submit(new Callable<Integer>() {
-                @Override
-                public Integer call() throws Exception {
-                    final List<GeneratedClass> classes = randomClasses(testsPerCPU);
-                    int failures = 0;
-                    for (final GeneratedClass clazz : classes) {
-                        Object obj = clazz.clazz.newInstance();
-                        long instrumented = instrument.measure(obj);
-                        long guessed = guess.measure(obj);
-                        if (instrumented != guessed) {
-                            System.err.println(String.format("Guessed %d, instrumented %d for %s", guessed, instrumented, clazz.description));
-                            failures++;
-                        }
+            results.add(EXEC.submit(() -> {
+                final List<GeneratedClass> classes = randomClasses(testsPerCPU);
+                int failures = 0;
+                for (final GeneratedClass clazz : classes) {
+                    Object obj = clazz.clazz.getConstructor().newInstance();
+                    long instrumented = instrument.measure(obj);
+                    long guessed = guess.measure(obj);
+                    if (instrumented != guessed) {
+                        System.err.println(String.format("Guessed %d, instrumented %d for %s", guessed, instrumented, clazz.description));
+                        failures++;
                     }
-                    return failures;
                 }
+                return failures;
             }));
         }
         int failures = 0;
