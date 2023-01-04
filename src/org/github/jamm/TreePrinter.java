@@ -13,9 +13,9 @@ final class TreePrinter implements MemoryMeterListener {
 
     private static final String LINE_SEPARATOR = System.getProperty("line.separator");
 
-    private static final int ONE_KB = 1024;
-
-    private static final int ONE_MB = 1024 * ONE_KB;
+    private static final long ONE_KB = 1024;
+    private static final long ONE_MB = 1024 * ONE_KB;
+    private static final long ONE_GB = 1024 * ONE_MB;
 
     /**
      * Mapping between objects and their information
@@ -267,11 +267,12 @@ final class TreePrinter implements MemoryMeterListener {
         }
 
         private static void appendSizeTo(StringBuilder builder, long size) {
-
-            if (size >= ONE_MB) {
-                builder.append(String.format("%.2f", (double) size / ONE_MB)).append(" KB");
+            if (size >= ONE_GB) {
+                builder.append(String.format("%.2f", (double) size / ONE_GB)).append(" GiB");
+            } else if (size >= ONE_MB) {
+                builder.append(String.format("%.2f", (double) size / ONE_MB)).append(" MiB");
             } else if (size >= ONE_KB) {
-                builder.append(String.format("%.2f", (double) size / ONE_KB)).append(" KB");
+                builder.append(String.format("%.2f", (double) size / ONE_KB)).append(" KiB");
             } else {
                 builder.append(size).append(" bytes");
             }

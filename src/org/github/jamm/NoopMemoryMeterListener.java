@@ -10,13 +10,7 @@ public final class NoopMemoryMeterListener implements MemoryMeterListener {
      */
     private static final MemoryMeterListener INSTANCE = new NoopMemoryMeterListener();
 
-    public static final Factory FACTORY = new Factory() {
-
-        @Override
-        public MemoryMeterListener newInstance() {
-            return INSTANCE;
-        }
-    };
+    public static final Factory FACTORY = () -> INSTANCE;
 
     @Override
     public void objectMeasured(Object current, long size) {

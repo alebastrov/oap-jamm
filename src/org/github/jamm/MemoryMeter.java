@@ -37,13 +37,11 @@ public class MemoryMeter {
     private final MemoryMeterListener.Factory listenerFactory;
 
     public MemoryMeter() {
-        this(new Callable<Set<Object>>() {
-            public Set<Object> call() throws Exception {
-                // using a normal HashSet to track seen objects screws things up in two ways:
-                // - it can undercount objects that are "equal"
-                // - calling equals() can actually change object state (e.g. creating entrySet in HashMap)
-                return Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
-            }
+        this(() -> {
+            // using a normal HashSet to track seen objects screws things up in two ways:
+            // - it can undercount objects that are "equal"
+            // - calling equals() can actually change object state (e.g. creating entrySet in HashMap)
+            return Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>());
         }, true, Guess.NEVER, false, false, false, NoopMemoryMeterListener.FACTORY);
     }
 

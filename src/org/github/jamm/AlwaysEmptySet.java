@@ -18,11 +18,7 @@ public class AlwaysEmptySet<T> implements Set<T> {
     }
 
     public static <T> Callable<Set<T>> provider() {
-        return new Callable<Set<T>>() {
-            public Set<T> call() throws Exception {
-                return create();
-            }
-        };
+        return () -> create();
     }
 
     public int size() {
